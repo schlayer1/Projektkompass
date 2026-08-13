@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projekt-Kompass | Heimbürgeschule Kahla</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        khblue: '#1a779f',
+                        khorange: '#f49826',
+                        khteal: '#0eb2b2',
+                        khlightblue: '#58bdf2',
+                        bglight: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Drag & Drop Styles */
+        .task-card.dragging { opacity: 0.5; transform: scale(0.98); }
+        .column-content.drag-over { background-color: #e2e8f0; border: 2px dashed #94a3b8; }
+
+        /* Print Styles */
+        @media print {
+            body { background-color: white !important; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            header { border-bottom: 2px solid #1a779f !important; box-shadow: none !important; padding: 10px 0 !important; }
+            .kanban-board { display: flex; flex-direction: row; gap: 10px; overflow: visible; }
+            .kanban-column { 
+                page-break-inside: avoid; 
+                border: 1px solid #e2e8f0; 
+                background: white !important;
+                flex: 1;
+            }
+            .column-content { overflow: visible !important; min-height: auto !important; }
+            .task-card { border: 1px solid #cbd5e1 !important; box-shadow: none !important; break-inside: avoid; margin-bottom: 10px; }
+            #printJournal { display: block !important; margin-top: 20px; border-top: 2px solid #e2e8f0; padding-top: 15px; }
+        }
+    </style>
+</head>
+<body class="bg-bglight min-h-screen flex flex-col font-sans text-gray-800">
+
+    <!-- Verstecktes Input-Feld für den Datei-Import -->
+    <input type="file" id="importFile" accept=".json" class="hidden" onchange="handleImport(event)">
+
+    <!-- HEADER -->
+    <header class="bg-white shadow-md py-4 px-4 md:px-6 flex flex-col xl:flex-row justify-between items-center gap-4 border-b-4 border-khblue z-10">
+        <div class="flex items-center gap-4 w-full xl:w-auto">
+            <img src="image.png" alt="Logo" class="w-16 h-16 object-contain rounded-full border-2 border-khblue p-1" onerror="this.style.display='none'">
+            <div>
+                <h1 class="text-2xl font-bold text-khblue m-0 leading-tight">Projekt-Kompass</h1>
+                <p class="text-sm font-medium text-khorange m-0">Agile Projektarbeit</p>
+            </div>
+        </div>
+
+        <!-- Meta Daten -->
+        <div class="flex flex-col sm:flex-row gap-3 w-full xl:w-auto no-print">
+            <input type="text" id="studentName" placeholder="Gruppe (z.B. Gruppe 1)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-khblue focus:ring-1 focus:ring-khblue w-full sm:w-40" onchange="saveMeta()">
+            <input type="text" id="projectName" placeholder="Projekttitel" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-khblue focus:ring-1 focus:ring-khblue w-full sm:w-48" onchange="saveMeta()">
+        </div>
+        
+        <!-- Print Header -->
+        <div class="hidden print-only w-full mt-4 text-sm text-gray-600 border-t pt-4">
+            <p><strong>Gruppe/Name:</strong> <span id="printName"></span></p>
+            <p><strong>Projekt:</strong> <span id="printProject"></span></p>
+            <p><strong>Stand vom:</strong> <span id="printDate"></span></p>
+        </div>
+
+        <!-- Toolbar (Export/Import, PDF, Senden) -->
+        <div class="flex flex-wrap gap-2 w-full xl:w-auto justify-start xl:justify-end no-print">
+            
+            <!-- Dateiverwaltung -->
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button onclick="document.getElementById('importFile').click()" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg font-medium transition-colors border border-gray-300 shadow-sm" title="Projekt aus Datei laden">
+                    <i class="ph ph-upload-simple text-lg text-khblue"></i>
+                    <span class="text-sm hidden md:inline">Laden</span>
+                </button>
+                <button onclick="exportData()" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-lg font-medium transition-colors border border-gray-300 shadow-sm" title="Projekt als Datei speichern">
+                    <i class="ph ph-download-simple text-lg text-khblue"></i>
+                    <span class="text-sm hidden md:inline">Speichern</span>
+                </button>
+            </div>
+
+            <!-- Dokumentation -->
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button onclick="window.print()" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors border border-gray-300 shadow-sm" title="Als PDF speichern oder drucken">
+                    <i class="ph ph-printer text-lg"></i>
+                    <span class="text-sm hidden sm:inline">PDF / Druck</span>
+                </button>
+                <button onclick="openReportModal()" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-khblue hover:bg-opacity-90 text-white px-4 py-2 rounded-lg font-medium transition-transform active:scale-95 shadow-sm">
+                    <i class="ph ph-paper-plane-tilt text-lg"></i>
+                    <span class="text-sm">Bericht senden</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 p-4 md:p-6 flex flex-col overflow-hidden">
+        
+        <!-- Projekt-Tagebuch (Collapsible) -->
+        <div class="no-print bg-white rounded-xl shadow-sm border border-gray-200 mb-6 shrink-0 transition-all duration-300">
+            <button onclick="toggleJournal()" class="w-full px-5 py-3 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors rounded-xl">
+                <div class="flex items-center gap-3">
+                    <div class="bg-khblue text-white p-1.5 rounded-lg"><i class="ph ph-book-open text-xl"></i></div>
+                    <span class="font-bold text-gray-700 text-lg">Projekt-Tagebuch (Reflexion)</span>
+                </div>
+                <i id="journalIcon" class="ph ph-caret-down text-gray-500 text-xl transition-transform duration-300"></i>
+            </button>
+            <div id="journalContent" class="hidden p-5 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-100 bg-white rounded-b-xl">
+                <div>
+                    <label class="block text-sm font-bold text-green-600 mb-2 flex items-center gap-1"><i class="ph ph-thumbs-up"></i> Das lief heute gut:</label>
+                    <textarea id="journalGood" onchange="saveJournal()" placeholder="z.B. Wir haben viel Material gefunden..." class="w-full p-3 border border-gray-200 rounded-lg bg-green-50/30 focus:bg-white focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 resize-none text-sm" rows="3"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-orange-600 mb-2 flex items-center gap-1"><i class="ph ph-warning"></i> Das war schwierig:</label>
+                    <textarea id="journalBad" onchange="saveJournal()" placeholder="z.B. Einordnung der Quellen fiel schwer..." class="w-full p-3 border border-gray-200 rounded-lg bg-orange-50/30 focus:bg-white focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 resize-none text-sm" rows="3"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-khblue mb-2 flex items-center gap-1"><i class="ph ph-target"></i> Ziel für nächstes Mal:</label>
+                    <textarea id="journalNext" onchange="saveJournal()" placeholder="z.B. Gliederung endgültig abschließen." class="w-full p-3 border border-gray-200 rounded-lg bg-blue-50/30 focus:bg-white focus:outline-none focus:border-khblue focus:ring-1 focus:ring-khblue resize-none text-sm" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-4 flex justify-between items-center no-print shrink-0">
+            <h2 class="text-xl font-bold text-gray-700 hidden sm:block">Aufgabenübersicht</h2>
+            <button onclick="openAddModal()" class="flex items-center gap-2 bg-khteal hover:bg-opacity-90 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm w-full sm:w-auto justify-center">
+                <i class="ph ph-plus-circle text-xl"></i>
+                Neue Aufgabe
+            </button>
+        </div>
+
+        <!-- Kanban Columns -->
+        <div class="kanban-board flex-1 flex gap-4 md:gap-6 overflow-x-auto pb-4 snap-x h-full">
+            
+            <!-- Zu Erledigen -->
+            <div class="kanban-column flex-1 min-w-[280px] max-w-[400px] flex flex-col rounded-2xl overflow-hidden shadow-sm snap-center shrink-0 border border-gray-200 bg-slate-100">
+                <div class="bg-khorange py-3 px-4 text-white font-bold text-lg shadow-sm flex justify-between items-center">
+                    Zu Erledigen
+                    <span id="count-todo" class="bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-sm">0</span>
+                </div>
+                <div id="col-todo" class="column-content flex-1 p-3 overflow-y-auto flex flex-col gap-3 min-h-[200px] transition-colors" ondrop="drop(event, 'todo')" ondragover="allowDrop(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <!-- In Arbeit -->
+            <div class="kanban-column flex-1 min-w-[280px] max-w-[400px] flex flex-col rounded-2xl overflow-hidden shadow-sm snap-center shrink-0 border border-gray-200 bg-slate-100">
+                <div class="bg-khlightblue py-3 px-4 text-white font-bold text-lg shadow-sm flex justify-between items-center">
+                    In Arbeit
+                    <span id="count-in_progress" class="bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-sm">0</span>
+                </div>
+                <div id="col-in_progress" class="column-content flex-1 p-3 overflow-y-auto flex flex-col gap-3 min-h-[200px] transition-colors" ondrop="drop(event, 'in_progress')" ondragover="allowDrop(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <!-- Erledigt -->
+            <div class="kanban-column flex-1 min-w-[280px] max-w-[400px] flex flex-col rounded-2xl overflow-hidden shadow-sm snap-center shrink-0 border border-gray-200 bg-slate-100">
+                <div class="bg-khteal py-3 px-4 text-white font-bold text-lg shadow-sm flex justify-between items-center">
+                    Erledigt
+                    <span id="count-done" class="bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-sm">0</span>
+                </div>
+                <div id="col-done" class="column-content flex-1 p-3 overflow-y-auto flex flex-col gap-3 min-h-[200px] transition-colors" ondrop="drop(event, 'done')" ondragover="allowDrop(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+        </div>
+
+        <!-- Print Journal (Only visible on print) -->
+        <div id="printJournal" class="hidden print-only text-sm text-gray-700">
+            <h3 class="font-bold text-lg border-b pb-1 mb-2 mt-6">📖 Projekt-Tagebuch</h3>
+            <p><strong>Das lief gut:</strong> <span id="printJournalGood">-</span></p>
+            <p><strong>Das war schwierig:</strong> <span id="printJournalBad">-</span></p>
+            <p><strong>Ziel für nächstes Mal:</strong> <span id="printJournalNext">-</span></p>
+        </div>
+
+    </main>
+
+    <!-- MODALS -->
+
+    <!-- Add Task Modal -->
+    <div id="addTaskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50 no-print">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+            <div class="border-l-4 border-khorange p-6 flex flex-col h-full overflow-y-auto">
+                <h3 class="font-bold text-xl text-khblue mb-4 shrink-0">Neue Aufgabe erstellen</h3>
+                
+                <form id="taskForm" onsubmit="handleAddTask(event)" class="flex flex-col gap-4">
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Was muss getan werden? *</label>
+                        <input type="text" id="newTaskTitle" placeholder="z.B. Plakat zeichnen" class="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-khorange focus:ring-1 focus:ring-khorange" required>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label>
+                            <select id="newTaskTag" class="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-khorange bg-white text-sm">
+                                <option value="none">Keine Kategorie</option>
+                                <option value="recherche">🔍 Recherche</option>
+                                <option value="material">✂️ Material</option>
+                                <option value="text">✍️ Text</option>
+                                <option value="layout">🎨 Layout</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Wer macht's?</label>
+                            <input type="text" id="newAssignee" placeholder="Name / Alle" class="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-khorange focus:ring-1 focus:ring-khorange text-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Fällig bis: (Deadline)</label>
+                        <input type="date" id="newTaskDate" class="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-khorange focus:ring-1 focus:ring-khorange text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Details / Notizen (Optional)</label>
+                        <textarea id="newTaskDesc" placeholder="Notizen, Links, etc." class="w-full p-2.5 border border-gray-300 rounded-lg resize-none focus:outline-none focus:border-khorange" rows="2"></textarea>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-sm font-medium text-gray-700">Checkliste (Teilschritte)</label>
+                            <button type="button" onclick="addChecklistInput()" class="text-xs text-khteal hover:text-khblue font-bold flex items-center gap-1">
+                                <i class="ph ph-plus"></i> Punkt hinzufügen
+                            </button>
+                        </div>
+                        <div id="checklistInputsContainer" class="flex flex-col gap-2"></div>
+                    </div>
+
+                    <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-gray-100 shrink-0">
+                        <button type="button" onclick="closeAddModal()" class="px-4 py-2 rounded-lg font-medium text-gray-600 hover:bg-gray-100 transition-colors">Abbrechen</button>
+                        <button type="submit" class="px-6 py-2 rounded-lg font-medium text-white transition-colors bg-khorange hover:bg-opacity-90 shadow-sm">Speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50 no-print">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 text-white bg-khblue">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="ph ph-share-network text-xl"></i> Statusbericht
+                </h3>
+                <button onclick="closeReportModal()" class="hover:bg-white hover:bg-opacity-20 p-1.5 rounded-full transition-colors">
+                    <i class="ph ph-x text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto">
+                <p class="text-gray-600 mb-4 text-sm">
+                    Die aktuelle Aufgabenverteilung und Reflexion auf einen Blick.
+                </p>
+                
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 font-mono text-xs sm:text-sm text-gray-700 whitespace-pre-wrap max-h-60 overflow-y-auto" id="reportPreview">
+                    <!-- Report content generated via JS -->
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button onclick="copyReport()" id="copyBtn" class="flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors border-2 bg-white border-gray-200 text-gray-700 hover:bg-gray-50">
+                        <i class="ph ph-copy text-xl"></i> Text Kopieren
+                    </button>
+                    
+                    <button onclick="sendMail()" class="flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-medium text-white transition-colors bg-khorange hover:bg-opacity-90 shadow-sm">
+                        <i class="ph ph-envelope-simple text-xl"></i> E-Mail öffnen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- State Management ---
+        const DEFAULT_TASKS = [
+            { 
+                id: '1', title: 'Präsentation vorbereiten', desc: 'Inhalte für das Referat sammeln und strukturieren.', status: 'todo', tag: 'recherche', assignee: 'Alle',
+                dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0], checklist: [{ text: 'Internetrecherche', done: false }], needsHelp: false
+            },
+            { 
+                id: '2', title: 'Bilder für Folien finden', desc: 'Wir finden keine lizenzfreien Bilder zum Thema.', status: 'in_progress', tag: 'layout', assignee: 'Tom',
+                dueDate: '', checklist: [], needsHelp: true
+            }
+        ];
+
+        let tasks = [];
+        let draggedTaskId = null;
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            
+            window.addEventListener('beforeprint', () => {
+                document.getElementById('printName').innerText = document.getElementById('studentName').value || 'Nicht angegeben';
+                document.getElementById('printProject').innerText = document.getElementById('projectName').value || 'Nicht angegeben';
+                
+                const now = new Date();
+                document.getElementById('printDate').innerText = now.toLocaleDateString('de-DE') + ' um ' + now.toLocaleTimeString('de-DE', { hour: '2-digit', minute:'2-digit' }) + ' Uhr';
+
+                document.getElementById('printJournalGood').innerText = document.getElementById('journalGood').value || '-';
+                document.getElementById('printJournalBad').innerText = document.getElementById('journalBad').value || '-';
+                document.getElementById('printJournalNext').innerText = document.getElementById('journalNext').value || '-';
+            });
+        });
+
+        function loadData() {
+            try {
+                const savedTasks = localStorage.getItem('hk_tasks_v4');
+                tasks = savedTasks ? JSON.parse(savedTasks) : DEFAULT_TASKS;
+                
+                document.getElementById('studentName').value = localStorage.getItem('hk_student') || '';
+                document.getElementById('projectName').value = localStorage.getItem('hk_project') || '';
+                
+                document.getElementById('journalGood').value = localStorage.getItem('hk_journal_good') || '';
+                document.getElementById('journalBad').value = localStorage.getItem('hk_journal_bad') || '';
+                document.getElementById('journalNext').value = localStorage.getItem('hk_journal_next') || '';
+            } catch (e) {
+                tasks = DEFAULT_TASKS;
+            }
+            renderBoard();
+        }
+
+        function saveData() { localStorage.setItem('hk_tasks_v4', JSON.stringify(tasks)); }
+        
+        function saveMeta() {
+            localStorage.setItem('hk_student', document.getElementById('studentName').value);
+            localStorage.setItem('hk_project', document.getElementById('projectName').value);
+        }
+
+        function saveJournal() {
+            localStorage.setItem('hk_journal_good', document.getElementById('journalGood').value);
+            localStorage.setItem('hk_journal_bad', document.getElementById('journalBad').value);
+            localStorage.setItem('hk_journal_next', document.getElementById('journalNext').value);
+        }
+
+        function toggleJournal() {
+            const content = document.getElementById('journalContent');
+            const icon = document.getElementById('journalIcon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                content.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
+        // --- Import / Export (Dateiverwaltung) ---
+        function exportData() {
+            const exportObj = {
+                version: "1.0",
+                studentName: document.getElementById('studentName').value,
+                projectName: document.getElementById('projectName').value,
+                journalGood: document.getElementById('journalGood').value,
+                journalBad: document.getElementById('journalBad').value,
+                journalNext: document.getElementById('journalNext').value,
+                tasks: tasks
+            };
+            
+            const dataStr = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            
+            let pName = document.getElementById('projectName').value.trim();
+            if(!pName) pName = "projekt";
+            pName = pName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            
+            a.download = `kompass-${pName}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.tasks && Array.isArray(data.tasks)) {
+                        tasks = data.tasks;
+                        document.getElementById('studentName').value = data.studentName || '';
+                        document.getElementById('projectName').value = data.projectName || '';
+                        document.getElementById('journalGood').value = data.journalGood || '';
+                        document.getElementById('journalBad').value = data.journalBad || '';
+                        document.getElementById('journalNext').value = data.journalNext || '';
+                        
+                        // Speichere die geladenen Daten sofort im Browser
+                        saveData();
+                        saveMeta();
+                        saveJournal();
+                        renderBoard();
+                        alert('✅ Projekt-Daten erfolgreich geladen!');
+                    } else {
+                        alert('❌ Die Datei scheint nicht das richtige Format zu haben.');
+                    }
+                } catch (err) {
+                    alert('❌ Fehler beim Lesen der Datei. Ist es eine gültige JSON-Datei?');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset input, damit die gleiche Datei nochmal geladen werden kann
+        }
+
+
+        // --- Rendering Helpers ---
+        function getTagMarkup(tag) {
+            const tags = {
+                'recherche': '<span class="inline-block bg-blue-100 text-blue-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-blue-200">🔍 Recherche</span>',
+                'material': '<span class="inline-block bg-orange-100 text-orange-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-orange-200">✂️ Material</span>',
+                'text': '<span class="inline-block bg-green-100 text-green-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-green-200">✍️ Text</span>',
+                'layout': '<span class="inline-block bg-purple-100 text-purple-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-purple-200">🎨 Layout</span>',
+            };
+            return tags[tag] || '';
+        }
+
+        function getDeadlineInfo(dateString) {
+            if (!dateString) return null;
+            const today = new Date(); today.setHours(0,0,0,0);
+            const due = new Date(dateString);
+            const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+            const formattedDate = due.toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit', year: '2-digit'});
+            
+            if (diffDays < 0) return { class: 'bg-red-100 text-red-800 border-red-200', text: 'Überfällig!', icon: 'ph-warning-circle' };
+            else if (diffDays <= 3) return { class: 'bg-orange-100 text-orange-800 border-orange-200', text: diffDays === 0 ? 'Heute fällig' : `In ${diffDays} Tag(en)`, icon: 'ph-clock' };
+            else return { class: 'bg-green-100 text-green-800 border-green-200', text: `${formattedDate}`, icon: 'ph-calendar-blank' };
+        }
+
+        function toggleChecklist(taskId, itemIndex) {
+            const task = tasks.find(t => t.id === taskId);
+            if(task && task.checklist[itemIndex]) {
+                task.checklist[itemIndex].done = !task.checklist[itemIndex].done;
+                saveData(); renderBoard();
+            }
+        }
+
+        function toggleHelp(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if(task) { task.needsHelp = !task.needsHelp; saveData(); renderBoard(); }
+        }
+
+        function renderBoard() {
+            const columns = ['todo', 'in_progress', 'done'];
+            
+            columns.forEach(status => {
+                const container = document.getElementById(`col-${status}`);
+                const countBadge = document.getElementById(`count-${status}`);
+                
+                container.innerHTML = '';
+                const columnTasks = tasks.filter(t => t.status === status);
+                countBadge.innerText = columnTasks.length;
+
+                if(columnTasks.length === 0) {
+                    container.innerHTML = `<div class="text-center text-gray-400 mt-6 text-sm italic no-print">Spalte ist leer</div>`;
+                    return;
+                }
+
+                columnTasks.forEach(task => {
+                    const el = document.createElement('div');
+                    
+                    const isDone = status === 'done';
+                    const opacityClass = isDone ? 'opacity-70' : '';
+                    const alertClass = task.needsHelp && !isDone ? 'bg-red-50 border-red-300 ring-2 ring-red-200' : 'bg-white border-gray-200 hover:shadow-md';
+                    
+                    el.className = `task-card p-4 rounded-xl shadow-sm border cursor-grab transition-all relative group break-inside-avoid ${opacityClass} ${alertClass}`;
+                    el.draggable = true;
+                    el.id = `task-${task.id}`;
+                    
+                    el.addEventListener('dragstart', (e) => dragStart(e, task.id));
+                    el.addEventListener('dragend', dragEnd);
+
+                    const assigneeMarkup = task.assignee ? `<div class="flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-white/70 px-2 py-0.5 rounded-full border border-gray-200"><i class="ph ph-user"></i> ${escapeHTML(task.assignee)}</div>` : '';
+                    
+                    let deadlineMarkup = '';
+                    if (task.dueDate && !isDone) {
+                        const dInfo = getDeadlineInfo(task.dueDate);
+                        deadlineMarkup = `<div class="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border ${dInfo.class}"><i class="ph ${dInfo.icon}"></i> ${dInfo.text}</div>`;
+                    } else if (task.dueDate && isDone) {
+                        deadlineMarkup = `<div class="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border bg-gray-100 text-gray-500 border-gray-200"><i class="ph ph-check"></i> Erledigt</div>`;
+                    }
+
+                    let checklistMarkup = '';
+                    if (task.checklist && task.checklist.length > 0) {
+                        const completed = task.checklist.filter(c => c.done).length;
+                        const total = task.checklist.length;
+                        const progress = (completed / total) * 100;
+                        
+                        checklistMarkup = `
+                            <div class="mt-3 pt-3 border-t border-gray-200/60 no-print">
+                                <div class="w-full bg-gray-200/70 rounded-full h-1.5 mb-2 overflow-hidden"><div class="bg-khteal h-1.5 rounded-full transition-all" style="width: ${progress}%"></div></div>
+                                <div class="flex flex-col gap-1 mt-2">
+                                    ${task.checklist.map((item, idx) => `
+                                        <label class="flex items-start gap-2 text-sm cursor-pointer p-1 -ml-1 rounded transition-colors group/check ${task.needsHelp ? 'hover:bg-red-100' : 'hover:bg-gray-50'}">
+                                            <input type="checkbox" class="mt-0.5 w-4 h-4 text-khteal rounded border-gray-300 focus:ring-khteal cursor-pointer" ${item.done ? 'checked' : ''} onchange="toggleChecklist('${task.id}', ${idx})">
+                                            <span class="leading-tight ${item.done ? 'line-through text-gray-400' : 'text-gray-800'}">${escapeHTML(item.text)}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    const helpBtnStyle = task.needsHelp ? 'text-red-700 bg-red-100 border-red-300 hover:bg-red-200' : 'text-gray-400 bg-gray-50 border-gray-200 hover:text-red-500 hover:bg-red-50';
+
+                    el.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-gray-800 pr-6 leading-tight ${isDone ? 'line-through text-gray-500' : ''}">${escapeHTML(task.title)}</h4>
+                            <button onclick="deleteTask('${task.id}')" class="text-gray-400 hover:text-red-500 transition-colors absolute right-3 top-3 md:opacity-0 group-hover:opacity-100 no-print" title="Löschen">
+                                <i class="ph ph-trash text-lg"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-1.5 mb-3 items-center">
+                            ${getTagMarkup(task.tag)}
+                            ${assigneeMarkup}
+                            ${deadlineMarkup}
+                        </div>
+
+                        ${task.desc ? `<p class="text-gray-700 text-sm mt-1 line-clamp-2 leading-relaxed">${escapeHTML(task.desc)}</p>` : ''}
+                        
+                        ${checklistMarkup}
+
+                        <!-- Action Bar -->
+                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-200/60 no-print">
+                            <button onclick="toggleHelp('${task.id}')" class="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded border transition-colors ${helpBtnStyle}">
+                                <i class="ph ${task.needsHelp ? 'ph-warning-octagon text-sm' : 'ph-hand-raising'}"></i> ${task.needsHelp ? 'Blockiert / Hilfe!' : 'Hilfe'}
+                            </button>
+                            
+                            <div class="flex gap-1 sm:hidden">
+                                ${!isDone && status !== 'todo' ? `<button onclick="moveTask('${task.id}', 'todo')" class="p-1 rounded bg-white border border-gray-200"><i class="ph ph-caret-left"></i></button>` : ''}
+                                ${status !== 'done' ? `<button onclick="moveTask('${task.id}', '${status === 'todo' ? 'in_progress' : 'done'}')" class="p-1 rounded bg-white border border-gray-200"><i class="ph ph-caret-right"></i></button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(el);
+                });
+            });
+        }
+
+        // --- Logic Operations ---
+        function addChecklistInput() {
+            const container = document.getElementById('checklistInputsContainer');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `
+                <input type="text" class="new-checklist-item w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-khorange text-sm" placeholder="Teilschritt...">
+                <button type="button" onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-500 p-1"><i class="ph ph-trash text-lg"></i></button>
+            `;
+            container.appendChild(div);
+            div.querySelector('input').focus();
+        }
+
+        function handleAddTask(e) {
+            e.preventDefault();
+            const title = document.getElementById('newTaskTitle').value.trim();
+            const desc = document.getElementById('newTaskDesc').value.trim();
+            const tag = document.getElementById('newTaskTag').value;
+            const assignee = document.getElementById('newAssignee').value.trim();
+            const dueDate = document.getElementById('newTaskDate').value;
+            
+            const checklistInputs = document.querySelectorAll('.new-checklist-item');
+            const checklist = [];
+            checklistInputs.forEach(input => {
+                const val = input.value.trim();
+                if(val) checklist.push({ text: val, done: false });
+            });
+
+            if (!title) return;
+
+            const newTask = {
+                id: Date.now().toString(),
+                title: title, desc: desc, status: 'todo', tag: tag, assignee: assignee,
+                dueDate: dueDate, checklist: checklist, needsHelp: false
+            };
+
+            tasks.push(newTask);
+            saveData(); renderBoard(); closeAddModal();
+        }
+
+        function deleteTask(id) {
+            if(confirm('Aufgabe wirklich löschen?')) {
+                tasks = tasks.filter(t => t.id !== id);
+                saveData(); renderBoard();
+            }
+        }
+
+        function moveTask(id, newStatus) {
+            const taskIndex = tasks.findIndex(t => t.id === id);
+            if (taskIndex > -1) {
+                tasks[taskIndex].status = newStatus;
+                if(newStatus === 'done') tasks[taskIndex].needsHelp = false; 
+                saveData(); renderBoard();
+            }
+        }
+
+        // --- Drag & Drop ---
+        function dragStart(e, id) { draggedTaskId = id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); setTimeout(() => e.target.classList.add('dragging'), 0); }
+        function dragEnd(e) { e.target.classList.remove('dragging'); draggedTaskId = null; document.querySelectorAll('.column-content').forEach(c => c.classList.remove('drag-over')); }
+        function allowDrop(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const dropzone = e.target.closest('.column-content'); if (dropzone) dropzone.classList.add('drag-over'); }
+        function dragLeave(e) { const dropzone = e.target.closest('.column-content'); if (dropzone) dropzone.classList.remove('drag-over'); }
+        function drop(e, status) { e.preventDefault(); document.querySelectorAll('.column-content').forEach(c => c.classList.remove('drag-over')); const id = e.dataTransfer.getData('text/plain') || draggedTaskId; if (id) moveTask(id, status); }
+
+        // --- Modals ---
+        function openAddModal() { document.getElementById('taskForm').reset(); document.getElementById('checklistInputsContainer').innerHTML = ''; addChecklistInput(); document.getElementById('addTaskModal').classList.replace('hidden', 'flex'); setTimeout(() => document.getElementById('newTaskTitle').focus(), 100); }
+        function closeAddModal() { document.getElementById('addTaskModal').classList.replace('flex', 'hidden'); }
+        function openReportModal() { document.getElementById('reportPreview').innerText = generateReportText(); document.getElementById('reportModal').classList.replace('hidden', 'flex'); const btn = document.getElementById('copyBtn'); btn.innerHTML = '<i class="ph ph-copy text-xl"></i> Text Kopieren'; btn.className = "flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors border-2 bg-white border-gray-200 text-gray-700 hover:bg-gray-50"; }
+        function closeReportModal() { document.getElementById('reportModal').classList.replace('flex', 'hidden'); }
+
+        // --- Reporting ---
+        function formatTaskForReport(t) {
+            let res = `  - ${t.title}`;
+            if (t.assignee) res += ` (@${t.assignee})`;
+            if (t.dueDate) res += ` [Fällig: ${new Date(t.dueDate).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit', year: '2-digit'})}]`;
+            if (t.checklist && t.checklist.length > 0) res += ` [Checkliste: ${t.checklist.filter(c => c.done).length}/${t.checklist.length}]`;
+            return res;
+        }
+
+        function generateReportText() {
+            const sName = document.getElementById('studentName').value || 'Unbekannt';
+            const pName = document.getElementById('projectName').value || 'Ohne Titel';
+            const now = new Date();
+            const dateString = now.toLocaleDateString('de-DE') + ' um ' + now.toLocaleTimeString('de-DE', { hour: '2-digit', minute:'2-digit' }) + ' Uhr';
+
+            const needsHelp = tasks.filter(t => t.needsHelp && t.status !== 'done');
+            const todo = tasks.filter(t => t.status === 'todo');
+            const inProgress = tasks.filter(t => t.status === 'in_progress');
+            const done = tasks.filter(t => t.status === 'done');
+
+            let report = `🚀 STATUSBERICHT: ${pName}\n`;
+            report += `👤 Gruppe/Von: ${sName}\n`;
+            report += `📅 Stand: ${dateString}\n`;
+            report += `==========================================\n\n`;
+            
+            if (needsHelp.length > 0) {
+                report += `🚨 HILFE BENÖTIGT BEI:\n`;
+                report += needsHelp.map(formatTaskForReport).join('\n');
+                report += `\n\n`;
+            }
+
+            report += `⏳ IN ARBEIT (${inProgress.length}):\n`;
+            report += inProgress.length > 0 ? inProgress.map(formatTaskForReport).join('\n') : "  - (keine Aufgaben in Arbeit)";
+            report += `\n\n`;
+
+            report += `✅ ERLEDIGT (${done.length}):\n`;
+            report += done.length > 0 ? done.map(formatTaskForReport).join('\n') : "  - (noch keine Aufgaben erledigt)";
+            report += `\n\n`;
+
+            report += `📋 NOCH ZU TUN (${todo.length}):\n`;
+            report += todo.length > 0 ? todo.map(formatTaskForReport).join('\n') : "  - (alles erledigt!)";
+            
+            const jGood = document.getElementById('journalGood').value.trim();
+            const jBad = document.getElementById('journalBad').value.trim();
+            const jNext = document.getElementById('journalNext').value.trim();
+
+            if (jGood || jBad || jNext) {
+                report += `\n\n📖 PROJEKT-TAGEBUCH:\n`;
+                report += `------------------------------------------\n`;
+                if(jGood) report += `👍 Lief gut: ${jGood}\n`;
+                if(jBad) report += `🚧 War schwierig: ${jBad}\n`;
+                if(jNext) report += `🎯 Nächstes Ziel: ${jNext}\n`;
+            }
+
+            return report;
+        }
+
+        function copyReport() {
+            const text = generateReportText();
+            const btn = document.getElementById('copyBtn');
+            const copyFallback = () => {
+                const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; document.body.appendChild(ta); ta.focus(); ta.select();
+                try { document.execCommand('copy'); showCopySuccess(btn); } catch (err) { alert('Kopieren fehlgeschlagen. Bitte manuell markieren.'); } document.body.removeChild(ta);
+            };
+            if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(() => showCopySuccess(btn)).catch(copyFallback); } else { copyFallback(); }
+        }
+
+        function showCopySuccess(btn) {
+            btn.innerHTML = '<i class="ph ph-check-circle text-xl"></i> Kopiert!';
+            btn.className = "flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors border-2 bg-green-50 border-green-500 text-green-700";
+            setTimeout(() => {
+                btn.innerHTML = '<i class="ph ph-copy text-xl"></i> Text Kopieren';
+                btn.className = "flex-1 flex justify-center items-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors border-2 bg-white border-gray-200 text-gray-700 hover:bg-gray-50";
+            }, 3000);
+        }
+
+        function sendMail() {
+            const pName = document.getElementById('projectName').value || 'Projekt';
+            const sName = document.getElementById('studentName').value || '';
+            const subject = encodeURIComponent(`Statusbericht: ${pName} ${sName ? '('+sName+')' : ''}`);
+            const body = encodeURIComponent(generateReportText());
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        }
+
+        // Utils
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, tag => ({'&': '&amp;','<': '&lt;','>': '&gt;',"'": '&#39;','"': '&quot;'}[tag]));
+        }
+    </script>
+</body>
+</html>
+
+
+
