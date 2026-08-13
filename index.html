@@ -283,8 +283,56 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         // --- State Management ---
+        
+        const today = new Date();
+        const in5Days = new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const todayStr = today.toISOString().split('T')[0];
+        const ago2Days = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        // 3 Beispiel-Aufgaben (für jede Spalte eine)
         const DEFAULT_TASKS = [
-            { id: '1', title: 'Thema eingrenzen', desc: 'Genau festlegen, was im Referat vorkommen soll.', status: 'todo', tag: 'praesentation', assignee: 'Alle', dueDate: '', checklist: [], needsHelp: false }
+            { 
+                id: 'ex1', 
+                title: 'Thema eingrenzen & recherchieren', 
+                desc: 'Wir müssen uns auf 3 Hauptpunkte für den Vortrag einigen und erste Infos sammeln.\nHier können auch sehr lange Notizen, viele Links und detaillierte Gedanken abgelegt werden, da sich die Karte jetzt dynamisch an den gesamten Textinhalt anpasst, ohne ihn einfach abzuschneiden.', 
+                status: 'todo', 
+                tag: 'recherche', 
+                assignee: 'Alle', 
+                dueDate: in5Days, 
+                checklist: [
+                    { text: 'Thema mit Lehrer absprechen', done: false },
+                    { text: '3 verlässliche Quellen finden', done: false }
+                ], 
+                needsHelp: false 
+            },
+            { 
+                id: 'ex2', 
+                title: 'Bilder für Folien finden', 
+                desc: 'ACHTUNG: Wir brauchen noch hochauflösende, lizenzfreie Bilder für die Präsentation.\nDie Schulrechner blockieren aber die Bildersuche!', 
+                status: 'in_progress', 
+                tag: 'layout', 
+                assignee: 'Lisa & Tom', 
+                dueDate: todayStr, 
+                checklist: [
+                    { text: 'Bilder zur Einleitung', done: true },
+                    { text: 'Grafik zum Hauptteil', done: false }
+                ], 
+                needsHelp: true 
+            },
+            { 
+                id: 'ex3', 
+                title: 'Gruppenvertrag & Rollen', 
+                desc: 'Wer ist für was zuständig und was sind unsere Regeln für die Zusammenarbeit?', 
+                status: 'done', 
+                tag: 'none', 
+                assignee: 'Anna', 
+                dueDate: ago2Days, 
+                checklist: [
+                    { text: 'Rollen verteilen', done: true },
+                    { text: 'Zeitplan grob skizzieren', done: true }
+                ], 
+                needsHelp: false 
+            }
         ];
 
         let tasks = [];
@@ -318,18 +366,19 @@
         // --- Data Persistence ---
         function loadData() {
             try {
-                const savedTasks = localStorage.getItem('hk_tasks_v5');
+                // Behält v7, zeigt die neuen dynamischen Beschreibungen
+                const savedTasks = localStorage.getItem('hk_tasks_v7');
                 tasks = savedTasks ? JSON.parse(savedTasks) : DEFAULT_TASKS;
                 
-                const savedHist = localStorage.getItem('hk_history_v5');
+                const savedHist = localStorage.getItem('hk_history_v7');
                 historyData = savedHist ? JSON.parse(savedHist) : [];
 
-                document.getElementById('studentName').value = localStorage.getItem('hk_student') || '';
-                document.getElementById('projectName').value = localStorage.getItem('hk_project') || '';
-                document.getElementById('teacherName').value = localStorage.getItem('hk_teacher') || '';
-                document.getElementById('journalGood').value = localStorage.getItem('hk_journal_good') || '';
-                document.getElementById('journalBad').value = localStorage.getItem('hk_journal_bad') || '';
-                document.getElementById('journalNext').value = localStorage.getItem('hk_journal_next') || '';
+                document.getElementById('studentName').value = localStorage.getItem('hk_student_v7') || '';
+                document.getElementById('projectName').value = localStorage.getItem('hk_project_v7') || '';
+                document.getElementById('teacherName').value = localStorage.getItem('hk_teacher_v7') || '';
+                document.getElementById('journalGood').value = localStorage.getItem('hk_journal_good_v7') || '';
+                document.getElementById('journalBad').value = localStorage.getItem('hk_journal_bad_v7') || '';
+                document.getElementById('journalNext').value = localStorage.getItem('hk_journal_next_v7') || '';
             } catch (e) {
                 tasks = DEFAULT_TASKS;
                 historyData = [];
@@ -339,20 +388,20 @@
         }
 
         function saveData() { 
-            localStorage.setItem('hk_tasks_v5', JSON.stringify(tasks)); 
+            localStorage.setItem('hk_tasks_v7', JSON.stringify(tasks)); 
             trackHistory();
         }
         
         function saveMeta() {
-            localStorage.setItem('hk_student', document.getElementById('studentName').value);
-            localStorage.setItem('hk_project', document.getElementById('projectName').value);
-            localStorage.setItem('hk_teacher', document.getElementById('teacherName').value);
+            localStorage.setItem('hk_student_v7', document.getElementById('studentName').value);
+            localStorage.setItem('hk_project_v7', document.getElementById('projectName').value);
+            localStorage.setItem('hk_teacher_v7', document.getElementById('teacherName').value);
         }
 
         function saveJournal() {
-            localStorage.setItem('hk_journal_good', document.getElementById('journalGood').value);
-            localStorage.setItem('hk_journal_bad', document.getElementById('journalBad').value);
-            localStorage.setItem('hk_journal_next', document.getElementById('journalNext').value);
+            localStorage.setItem('hk_journal_good_v7', document.getElementById('journalGood').value);
+            localStorage.setItem('hk_journal_bad_v7', document.getElementById('journalBad').value);
+            localStorage.setItem('hk_journal_next_v7', document.getElementById('journalNext').value);
         }
 
         // --- Feature: Trend Chart ---
@@ -369,7 +418,7 @@
             else { historyData.push(entry); }
             
             if (historyData.length > 7) historyData = historyData.slice(-7);
-            localStorage.setItem('hk_history_v5', JSON.stringify(historyData));
+            localStorage.setItem('hk_history_v7', JSON.stringify(historyData));
         }
 
         function getTrendTextChart() {
@@ -554,13 +603,14 @@
 
                     const helpBtn = task.needsHelp ? 'text-red-700 bg-red-100 border-red-300' : 'text-gray-400 bg-gray-50 border-gray-200 hover:text-red-500 hover:bg-red-50';
 
+                    // --- ACHTUNG HIER WURDE LINE-CLAMP-4 ENTFERNT! ---
                     el.innerHTML = `
                         <div class="flex justify-between items-start mb-2">
                             <h4 class="font-bold text-gray-800 pr-6 leading-tight ${isDone ? 'line-through text-gray-500' : ''}">${escapeHTML(task.title)}</h4>
                             <button onclick="deleteTask('${task.id}')" class="text-gray-400 hover:text-red-500 absolute right-3 top-3 md:opacity-0 group-hover:opacity-100 no-print"><i class="ph ph-trash text-lg"></i></button>
                         </div>
                         <div class="flex flex-wrap gap-1.5 mb-3 items-center">${getTagMarkup(task.tag)} ${assignee} ${deadline}</div>
-                        ${task.desc ? `<p class="text-gray-700 text-sm mt-1 line-clamp-4 leading-relaxed whitespace-pre-wrap">${escapeHTML(task.desc)}</p>` : ''}
+                        ${task.desc ? `<p class="text-gray-700 text-sm mt-1 leading-relaxed whitespace-pre-wrap">${escapeHTML(task.desc)}</p>` : ''}
                         ${checklistHTML}
                         <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-200/60 no-print">
                             <button onclick="toggleHelp('${task.id}')" class="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded border transition-colors ${helpBtn}">
@@ -631,7 +681,7 @@
             document.getElementById('printTrendContent').innerText = getTrendTextChart();
         }
 
-        // --- Report Generation (Mit freundlicher Einleitung!) ---
+        // --- Report Generation ---
         function openReportModal() { 
             document.getElementById('reportPreview').innerText = generateReportText(); 
             document.getElementById('reportModal').classList.replace('hidden', 'flex'); 
